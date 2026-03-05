@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Clock, Users, BookOpen, Coffee, MapPin, ChevronRight, Download } from 'lucide-react';
+import { Clock, Users, BookOpen, Coffee, MapPin, ChevronRight, Download, Loader2 } from 'lucide-react';
 import { agendaData, AgendaItem } from '../data/agenda';
+import { domToPng } from 'modern-screenshot';
+import jsPDF from 'jspdf';
 
 const AgendaCard: React.FC<{ item: AgendaItem; index: number }> = ({ item, index }) => {
   const isBreak = item.type === 'break';
@@ -144,8 +146,39 @@ const AgendaCard: React.FC<{ item: AgendaItem; index: number }> = ({ item, index
 };
 
 export const Agenda: React.FC = () => {
-  const handlePrint = () => {
-    window.print();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!contentRef.current || isGenerating) return;
+    
+    setIsGenerating(true);
+    
+    try {
+      const dataUrl = await domToPng(contentRef.current, {
+        scale: 2,
+        backgroundColor: '#FDFDFB',
+      });
+      
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+      
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [img.width / 2, img.height / 2],
+      });
+      
+      pdf.addImage(dataUrl, 'PNG', 0, 0, img.width / 2, img.height / 2);
+      pdf.save('climate-education-agenda.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -154,15 +187,20 @@ export const Agenda: React.FC = () => {
         {/* Actions Header */}
         <div className="mb-6 flex justify-end print:hidden">
           <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 rounded-full bg-[#166572] px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#166572]/90 hover:shadow-md active:scale-95"
+            onClick={handleDownloadPDF}
+            disabled={isGenerating}
+            className="flex items-center gap-2 rounded-full bg-[#166572] px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#166572]/90 hover:shadow-md active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <Download className="h-3.5 w-3.5" />
-            Save as PDF
+            {isGenerating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            {isGenerating ? 'Generating...' : 'Save as PDF'}
           </button>
         </div>
 
-        <div className="bg-[#FDFDFB] p-4 sm:p-8 rounded-2xl">
+        <div ref={contentRef} className="bg-[#FDFDFB] p-4 sm:p-8 rounded-2xl">
           {/* Header Section */}
         <header className="mb-10 text-center">
           <motion.div
